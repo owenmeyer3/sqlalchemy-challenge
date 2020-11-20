@@ -9,16 +9,6 @@ import pandas as pd
 
 app = Flask(__name__)
 
-#connect to sqlite, reflct existing DB and tables
-'''
-engine = create_engine("sqlite:///Resources/hawaii.sqlite")
-Base = automap_base()
-Base.prepare(engine, reflect = True)
-station = Base.classes['station']
-measurement = Base.classes['measurement']
-session = Session(bind = engine)
-'''
-
 @app.route('/')
 def root():
     return '''
@@ -46,17 +36,14 @@ def root():
 
 @app.route('/api/v1.0/precipitation')
 def apiv10precipitation():
-    #connect to sqlite, reflct existing DB and tables
+    #connect to sqlite, reflect existing DB and tables
     engine = create_engine("sqlite:///Resources/hawaii.sqlite")
     Base = automap_base()
     Base.prepare(engine, reflect = True)
-    station = Base.classes['station']
     measurement = Base.classes['measurement']
     session = Session(bind = engine)
 
-    ###Create dataframe with all cities precipitation for each date
-
-    # Calculate the date 1 year ago from the last data point in the database
+    #calculate the date 1 year ago from the last data point in the database
     lastDateText = session.query(func.max(measurement.date)).all()[0][0]
     lastDateDT = dt.datetime.fromisoformat(lastDateText)
     firstDateDT = dt.datetime(lastDateDT.year - 1, lastDateDT.month, lastDateDT.day)
@@ -75,36 +62,33 @@ def apiv10precipitation():
         if firstStation:
             # Save the query results as a Pandas DataFrame for first city precipitation data 
             oneYearPrcpData = pd.read_sql(prcpQuery.statement, prcpQuery.session.bind)
-            #rename precipitation column to city code
             oneYearPrcpData.rename(columns = {'prcp': stationCode[0]}, inplace = True)
             firstStation = False
             
         else:
-            # Save the query results as a Pandas DataFrame and set the index to the date column
+            # Save the query results as a Pandas DataFrame and merge with dataframe of previous city columns
             tempOneYearPrcpData = pd.read_sql(prcpQuery.statement, prcpQuery.session.bind)
-            #merge this city precipitation data with cumulative table of all cities precipitation data
             oneYearPrcpData = pd.merge(oneYearPrcpData, tempOneYearPrcpData, on = 'date', how = 'outer')
             #rename precipitation column to city code
             oneYearPrcpData.rename(columns = {'prcp': stationCode[0]}, inplace = True)
-        #set date as dataframe index
+        #set date as dataframe index, sort the dataframe by date
         oneYearPrcpData.set_index('date', inplace = True)
-        # Sort the dataframe by date
         oneYearPrcpData.sort_index()
-        #convert to dictionary
+        #convert to dict then json
         oneYearPrcpDataDict = oneYearPrcpData.T.to_dict('index')
         oneYearPrcpDataJson = jsonify(oneYearPrcpDataDict)
     return oneYearPrcpDataJson
 
 @app.route('/api/v1.0/stations')
 def apiv10stations():
-    #connect to sqlite, reflct existing DB and tables
+    #connect to sqlite, reflect existing DB and tables
     engine = create_engine("sqlite:///Resources/hawaii.sqlite")
     Base = automap_base()
     Base.prepare(engine, reflect = True)
     station = Base.classes['station']
-    measurement = Base.classes['measurement']
     session = Session(bind = engine)
 
+    #find all stations and convert to Json
     stationsDict = dict(session.query(station.station, station.name).all())
     stationJson = jsonify(stationsDict)
 
@@ -112,5 +96,68 @@ def apiv10stations():
 
 @app.route('/api/v1.0/tobs')
 def apiv10tobs():
+    #connect to sqlite, reflct existing DB and tables
+    engine = create_engine("sqlite:///Resources/hawaii.sqlite")
+    Base = automap_base()
+    Base.prepare(engine, reflect = True)
+    measurement = Base.classes['measurement']
+    session = Session(bind = engine)
+
+    #find station with most observations
+    stationRowCount = session.query(measurement.station, func.count(measurement.station)).\
+                        group_by(measurement.station).\
+                        order_by(func.count(measurement.station).desc())
+    topStation = stationRowCount.first()[0]
+
+    #calculate the date 1 year ago from the last data point in the database
+    lastDateText = session.query(func.max(measurement.date)).all()[0][0]
+    lastDateDT = dt.datetime.fromisoformat(lastDateText)
+    firstDateDT = dt.datetime(lastDateDT.year - 1, lastDateDT.month, lastDateDT.day)
+    firstDateText = firstDateDT.isoformat()[0:10]
+
+    #find temps of station in the last year
+    topStationTemps = session.query(measurement.date, measurement.tobs).\
+        filter(measurement.date > firstDateText, measurement.tobs != sqlalchemy.sql.null(), measurement.station == topStation)
+    #display query as Json
+    topStationTempsJson = jsonify(dict(topStationTemps.all()))
+    return topStationTempsJson
+
+@app.route('/api/v1.0/<start>')
+def apiv10start(start):
+    #connect to sqlite, reflct existing DB and tables
+    engine = create_engine("sqlite:///Resources/hawaii.sqlite")
+    Base = automap_base()
+    Base.prepare(engine, reflect = True)
+    measurement = Base.classes['measurement']
+    session = Session(bind = engine)
+
+    #find temperature summary statistics of dates after start date
+    tempStatsAfterDate = session.query(func.min(measurement.tobs), func.avg(measurement.tobs), func.max(measurement.tobs)).\
+        filter(measurement.date >= start)
+    tmin, tavg, tmax = tempStatsAfterDate.all()[0]
+
+    #construct summary statistics Json
+    tempStatsAfterDateJson = jsonify({'tmin': tmin, 'tavg': tavg, 'tmax': tmax})
+
+    return tempStatsAfterDateJson
+
+@app.route('/api/v1.0/<start>/<end>')
+def apiv10startend(start, end):
+    #connect to sqlite, reflct existing DB and tables
+    engine = create_engine("sqlite:///Resources/hawaii.sqlite")
+    Base = automap_base()
+    Base.prepare(engine, reflect = True)
+    measurement = Base.classes['measurement']
+    session = Session(bind = engine)
+
+    #find temperature summary statistics of dates in date range
+    tempStatsAfterDate = session.query(func.min(measurement.tobs), func.avg(measurement.tobs), func.max(measurement.tobs)).\
+        filter(measurement.date >= start).filter(measurement.date <= end)
+    tmin, tavg, tmax = tempStatsAfterDate.all()[0]
+
+    #construct summary statistics Json
+    tempStatsRangeDateJson = jsonify({'tmin': tmin, 'tavg': tavg, 'tmax': tmax})
+
+    return tempStatsRangeDateJson
 
 app.run(debug = True)
