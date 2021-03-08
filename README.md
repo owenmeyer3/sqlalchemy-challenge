@@ -26,6 +26,8 @@ This project focuses on using sqlalchemy ORM queries to obtain and visualize tem
 
 * Use Pandas to print the summary statistics for the precipitation data.
 
+![](images/a.png)
+
 ## Station Analysis
 
 * Design a query to calculate the total number of stations.
@@ -42,15 +44,21 @@ This project focuses on using sqlalchemy ORM queries to obtain and visualize tem
 
   * Plot the results as a histogram with 12 bins.
 
+![](images/b.png)
+
 ## Trip Analysis
 
 * Choose a start date and end date for the trip
 
 * Use a bar chart with an error range to visualize the average temperature and temperature error over the trip
 
+![](images/c.png)
+
 * Find the total rainfall at each weather station over the trip
 
 * Calculate daily normals for each day of the trip and plot to a stacked area plot
+
+![](images/d.png)
 
 ## Climate App
 
